@@ -1,0 +1,125 @@
+// datasource configures the database connection engine to your MySQL instance
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// generator specifies the generation environment for the type-safe Prisma Client
+generator client {
+  provider = "prisma-client-js" // ◄ Fixed copy-paste typo here
+}
+
+// ==========================================
+// 1. IDENTITY & USER ROLES MODULE
+// ==========================================
+
+enum UserRole {
+  STUDENT
+  STAFF
+  ADMIN
+}
+
+enum Department {
+  REGISTRAR
+  FINANCE
+  FACULTY_HOD
+  CAMPUS_OPERATIONS
+  ESTATE_MANAGEMENT
+  GENERAL_SUPPORT
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  phoneNumber   String          @unique
+  passwordHash  String          // Securely managed via bcrypt on the NestJS backend
+  fullName      String
+  role          UserRole        @default(STUDENT)
+  department    Department?     // Nullable because students don't belong to an administrative desk
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Relations
+  ticketsSubmitted Ticket[]      @relation("StudentTickets")
+  ticketsProcessed TicketHistory[] @relation("StaffActions")
+
+  @@index([email])
+}
+
+// ==========================================
+// 2. ISSUE TRACKING & LEDGER MODULE
+// ==========================================
+
+enum IssueCategory {
+  ACADEMIC_PROGRESSION_VERIFICATION
+  ADMINISTRATIVE_OPERATIONAL_REQUESTS
+  FINANCIAL_GATEWAYS
+  DIRECT_SUPPORT_EXTERNAL_COMPLIANCE
+}
+
+enum TicketStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACTION_REQUIRED
+  APPROVED
+  RESOLVED
+}
+
+model Ticket {
+  id              String          @id @default(uuid())
+  trackingCode    String          @unique // User-friendly short code for the global workspace search bar
+  studentId       String
+  isInternational Boolean         @default(false)
+  category        IssueCategory
+  serviceName     String          // e.g., "SPECIAL_QUIZ", "CARD_REPLACEMENT", "RETAKE_PAYMENT"
+  description     String          @db.Text
+  status          TicketStatus    @default(SUBMITTED)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  student         User            @relation("StudentTickets", fields: [studentId], references: [id], onDelete: Cascade)
+  attachments     Attachment[]
+  historyLogs     TicketHistory[]
+
+  @@index([trackingCode])
+  @@index([status])
+  @@index([category])
+}
+
+// ==========================================
+// 3. EVIDENCE & ATTACHMENT PIPELINE
+// ==========================================
+
+model Attachment {
+  id          String   @id @default(uuid())
+  ticketId    String
+  fileUrl     String   // Destination storage bucket link (e.g., failed payment screenshots, medical notes)
+  fileName    String
+  uploadedAt  DateTime @default(now())
+
+  // Relations
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+// ==========================================
+// 4. HISTORICAL LOGGING & AUDIT TRAIL
+// ==========================================
+
+model TicketHistory {
+  id            String       @id @default(uuid())
+  ticketId      String
+  staffId       String?      // Can be null if system automated transitions happen
+  previousState TicketStatus
+  newState      TicketStatus
+  comment       String?      @db.Text // Mandatory message if changing status to ACTION_REQUIRED
+  changedAt     DateTime     @default(now())
+
+  // Relations
+  ticket        Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  staff         User?        @relation("StaffActions", fields: [staffId], references: [id])
+
+  @@index([ticketId])
+}
