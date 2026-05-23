@@ -5,8 +5,9 @@ export class RegisterDto {
   email: string;
 
   @IsString()
-  @IsOptional() // Made optional for frontend form variations where phone inputs are excluded
-  phoneNumber?: string;
+  // ◄ ENFORCED STRING REQUIREMENT TO LOCK IN DESTINATION SMS HANDSETS
+  @IsNotEmpty({ message: 'Mobile phone registration number is mandatory.' }) 
+  phoneNumber: string;
 
   @IsString()
   @MinLength(8, { message: 'Password must be at least 8 characters long.' })
@@ -18,10 +19,10 @@ export class RegisterDto {
 
   @IsString()
   @IsNotEmpty({ message: 'Account role is required.' })
-  role: string; // Captures 'STUDENT' or 'STAFF' choices passed by your UI portal select box
+  role: string; 
 
   @IsString()
-  @IsOptional() // ◄ Added to capture backend department desks (omitted safely by student identities)
+  @IsOptional() 
   department?: string;
 }
 

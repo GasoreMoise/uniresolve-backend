@@ -1,10 +1,17 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SubmitTicketDto } from './dto/submit-ticket.dto';
+import { SubmitTicketDto, UpdateTicketStatusDto } from './dto/submit-ticket.dto';
+// IMPORT THE DATA ENUMS STRAIGHT FROM YOUR GENERATED PRISMA CLIENT MODULE
+import { IssueCategory, Department } from '@prisma/client';
+import { SmsService } from '../sms/sms.service'; // INFOBIP GATEWAY LOGISTICS DISPATCH INTERFACE
 
 @Injectable()
 export class TicketsService {
-  constructor(private prisma: PrismaService) {}
+  // INJECT BOTH PRISMA AND THE SMS GATEWAY UTILITY SERVICE THROUGH THE CONSTRUCTOR
+  constructor(
+    private prisma: PrismaService,
+    private smsService: SmsService,
+  ) {}
 
   async createTicket(dto: SubmitTicketDto, studentId: string, files: Express.Multer.File[]) {
     // 1. Generate a short, scannable tracking code for your dashboard's search bar component
@@ -17,7 +24,8 @@ export class TicketsService {
         data: {
           trackingCode,
           studentId,
-          category: dto.category,
+          // EXPLICIT TYPE CAST APPLIED TO PASS PRISMA ENUM VALIDATION CHECKS
+          category: dto.category as IssueCategory,
           serviceName: dto.serviceName,
           description: dto.description,
           isInternational: dto.isInternational === 'true',
@@ -48,7 +56,6 @@ export class TicketsService {
         },
       });
 
-
       return {
         message: 'Your request has been successfully recorded.',
         trackingCode: ticket.trackingCode,
@@ -64,6 +71,12 @@ export class TicketsService {
       },
       include: {
         attachments: true, // Pulls along file upload metadata paths if they exist
+        // ◄ PULL ALONG THE HISTORICAL COMMENTARY LEDGER TRAIL FOR IN-APP NOTIFICATIONS
+        history: {
+          orderBy: {
+            changedAt: 'desc', // Forces the latest officer comments to sit straight at index [0]
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc', // Forces fresh case files to float straight to the top
@@ -79,7 +92,7 @@ export class TicketsService {
     });
   
     if (!staff || staff.role === 'STUDENT') {
-      throw new Error('Access denied. Academic profiles cannot access departmental ledgers.');
+      throw new BadRequestException('Access denied. Academic profiles cannot access departmental ledgers.');
     }
   
     // 2. Map their Department boundary directly to strict database IssueCategory enums
@@ -110,6 +123,64 @@ export class TicketsService {
       orderBy: {
         createdAt: 'asc', // Oldest unhandled claims float to the top to preserve SLAs
       },
+    });
+  }
+
+  async updateTicketStatus(ticketId: string, dto: UpdateTicketStatusDto, staffId: string) {
+    // 1. Verify the targeted ticket record exists and pull down target mobile information
+    const existingTicket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      // RECOVER TELEPHONY BOUNDARIES TO SEND SYSTEM NOTIFICATIONS OVER THE AIR
+      include: {
+        student: {
+          select: { phoneNumber: true },
+        },
+      },
+    });
+
+    if (!existingTicket) {
+      throw new NotFoundException(`No ticket found matching identifier: ${ticketId}`);
+    }
+
+    // 2. Enforce structural validation compliance
+    if (dto.status === 'ACTION_REQUIRED' && (!dto.comment || dto.comment.trim() === '')) {
+      throw new BadRequestException('A descriptive audit comment is mandatory when requesting action from a student.');
+    }
+
+    // 3. Wrap operations in a secure transaction block
+    return this.prisma.$transaction(async (tx) => {
+      // Step A: Update the primary ticket row status variable
+      const updatedTicket = await tx.ticket.update({
+        where: { id: ticketId },
+        data: { status: dto.status },
+      });
+
+      // Step B: Seed a clean row tracking log into the immutable audit history trail
+      await tx.ticketHistory.create({
+        data: {
+          ticketId: ticketId,
+          staffId: staffId, // Tracks the unique UUID of the officer who authorized this change
+          previousState: existingTicket.status,
+          newState: dto.status,
+          comment: dto.comment || `Case tracking status transitioned to ${dto.status}.`,
+        },
+      });
+
+      // STEP C: TRIGGER OFF-THREAD INFOBIP TELEPHONY ALERT DISPATCH LOGS
+      if (existingTicket.student?.phoneNumber) {
+        // Left unawaited on purpose so network latency from outside telco routing loops does not delay database connection lock release times
+        this.smsService.sendStatusAlert(
+          existingTicket.student.phoneNumber,
+          existingTicket.trackingCode,
+          dto.status
+        );
+      }
+
+      return {
+        message: 'Ticket status successfully updated and archived in the ledger.',
+        ticketId: updatedTicket.id,
+        newStatus: updatedTicket.status,
+      };
     });
   }
 }

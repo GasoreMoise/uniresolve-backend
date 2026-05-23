@@ -3,7 +3,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto, LoginDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-// ◄ IMPORT BOTH USERROLE AND DEPARTMENT ENUMS DIRECTLY FROM YOUR GENERATED PRISMA CLIENT
 import { UserRole, Department } from '@prisma/client'; 
 
 @Injectable()
@@ -14,15 +13,16 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const emailCheckCondition: any[] = [{ email: dto.email }];
+    // ◄ FORMATS INCOMING TEXT STRINGS INTO AN INTERNATIONAL PHONE NUMBER FOR TWILIO
+    const formattedPhoneNumber = `+250${dto.phoneNumber.trim()}`;
 
-    if (dto.phoneNumber) {
-      emailCheckCondition.push({ phoneNumber: dto.phoneNumber });
-    }
-
+    // Validates against unique row clashes inside the database model configuration fields
     const existingUser = await this.prisma.user.findFirst({
       where: {
-        OR: emailCheckCondition,
+        OR: [
+          { email: dto.email },
+          { phoneNumber: formattedPhoneNumber } // Compares formatted suffix
+        ],
       },
     });
 
@@ -33,21 +33,17 @@ export class AuthService {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(dto.password, saltRounds);
 
-    // Safely cast the incoming role string to the database enum profile
     const assignedRole = dto.role as UserRole;
-
-    // ◄ SAFELY CAST THE INCOMING DTO DEPT STRING INTO THE PRISMA DEPARTMENT ENUM TYPE
-    // If it's a student registering, it assigns null natively as structured in your schema
     const assignedDepartment = dto.department ? (dto.department as Department) : null;
 
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
-        phoneNumber: dto.phoneNumber || `NO_PHONE_${Date.now()}_${Math.round(Math.random() * 1000)}`, 
+        phoneNumber: formattedPhoneNumber, // ◄ WRITES TRUE TELEPHONY KEYS SECURELY TO THE RECORD
         passwordHash,
         fullName: dto.fullName,
         role: assignedRole, 
-        department: assignedDepartment, // ◄ COMMITS THE ASSIGNED DESK TO YOUR MYSQL ENGINE
+        department: assignedDepartment, 
       },
     });
 
@@ -68,7 +64,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password credentials.');
     }
 
-    // ◄ INJECT DEPARTMENT METADATA INTO THE SIGNED STATELESS JWT PAYLOAD
     const payload = { 
       sub: user.id, 
       email: user.email, 
@@ -82,7 +77,7 @@ export class AuthService {
         id: user.id,
         fullName: user.fullName,
         role: user.role,
-        department: user.department || '', // ◄ EXPORTS DESK KEY TO THE FRONTEND API CACHE WORKSPACE
+        department: user.department || '', 
       },
     };
   }

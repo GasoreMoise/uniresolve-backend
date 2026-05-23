@@ -6,11 +6,13 @@ import {
   UseInterceptors, 
   UploadedFiles, 
   ValidationPipe, 
-  UseGuards 
+  UseGuards,
+  Patch,
+  Param 
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { TicketsService } from './tickets.service';
-import { SubmitTicketDto } from './dto/submit-ticket.dto';
+import { SubmitTicketDto, UpdateTicketStatusDto } from './dto/submit-ticket.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; 
 import { GetUserId } from '../auth/decorators/get-user.decorator'; 
 import { diskStorage } from 'multer';
@@ -59,5 +61,15 @@ export class TicketsController {
   @UseGuards(JwtAuthGuard) // Protects back-office ledgers from unauthorized scrapers
   async getDepartmentQueue(@GetUserId() staffId: string) {
     return this.ticketsService.getDepartmentTickets(staffId);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard) // Blocks unauthorized accounts from altering critical ticket records
+  async updateStatus(
+    @Param('id') ticketId: string,
+    @Body(new ValidationPipe()) dto: UpdateTicketStatusDto,
+    @GetUserId() staffId: string, // Captures the exact staff UUID executing this state change in real time
+  ) {
+    return this.ticketsService.updateTicketStatus(ticketId, dto, staffId);
   }
 }

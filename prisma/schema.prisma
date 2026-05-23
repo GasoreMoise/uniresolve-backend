@@ -80,7 +80,7 @@ model Ticket {
   // Relations
   student         User            @relation("StudentTickets", fields: [studentId], references: [id], onDelete: Cascade)
   attachments     Attachment[]
-  historyLogs     TicketHistory[]
+  history     TicketHistory[]
 
   @@index([trackingCode])
   @@index([status])

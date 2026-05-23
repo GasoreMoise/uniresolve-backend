@@ -1,20 +1,36 @@
-import { IsEnum, IsString, IsNotEmpty, IsBooleanString } from 'class-validator';
-import { IssueCategory } from '@prisma/client';
+// Inside src/tickets/dto/submit-ticket.dto.ts
+import { IsEnum, IsString, IsOptional, IsNotEmpty } from 'class-validator';
+import { TicketStatus } from '@prisma/client';
 
+/**
+ * Existing working DTO class structure for submissions
+ */
 export class SubmitTicketDto {
-  @IsEnum(IssueCategory, {
-    message: 'Category must match one of the four blocks on your main layout.',
-  })
-  category: IssueCategory;
-
+  @IsNotEmpty()
   @IsString()
-  @IsNotEmpty({ message: 'Please specify the exact service target (e.g., SPECIAL_QUIZ).' })
+  category: string;
+
+  @IsNotEmpty()
+  @IsString()
   serviceName: string;
 
+  @IsNotEmpty()
   @IsString()
-  @IsNotEmpty({ message: 'Please provide a breakdown of your issue for administrative tracking.' })
   description: string;
 
-  @IsBooleanString()
-  isInternational: string; // Transmitted as string from multipart form data uploads
+  @IsNotEmpty()
+  @IsString()
+  isInternational: string;
+}
+
+/**
+ * ◄ APPEND THIS CLASS DIRECTLY HERE TO TERMINATE COMPILER EXCEPTION PATHS
+ */
+export class UpdateTicketStatusDto {
+  @IsEnum(TicketStatus, { message: 'Invalid ticket state transformation target.' })
+  status: TicketStatus;
+
+  @IsString()
+  @IsOptional()
+  comment?: string;
 }
