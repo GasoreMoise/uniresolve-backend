@@ -13,7 +13,7 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    // ◄ FORMATS INCOMING TEXT STRINGS INTO AN INTERNATIONAL PHONE NUMBER FOR TWILIO
+    // FORMATS INCOMING TEXT STRINGS INTO AN INTERNATIONAL PHONE NUMBER FOR TWILIO
     const formattedPhoneNumber = `+250${dto.phoneNumber.trim()}`;
 
     // Validates against unique row clashes inside the database model configuration fields
@@ -39,7 +39,7 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
-        phoneNumber: formattedPhoneNumber, // ◄ WRITES TRUE TELEPHONY KEYS SECURELY TO THE RECORD
+        phoneNumber: formattedPhoneNumber, // WRITES TRUE TELEPHONY KEYS SECURELY TO THE RECORD
         passwordHash,
         fullName: dto.fullName,
         role: assignedRole, 
@@ -80,5 +80,22 @@ export class AuthService {
         department: user.department || '', 
       },
     };
+  }
+
+  // ◄ NEW METHOD: FETCHES REGISTERED LECTURERS FOR FRONTEND REGISTRY DROPDOWN
+  async findActiveLecturers() {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'LECTURER' as UserRole, // Grabs users specifically registered with the LECTURER role
+      },
+      select: {
+        id: true,
+        fullName: true,
+        department: true,
+      },
+      orderBy: {
+        fullName: 'asc', // Keeps the list alphabetized for cleaner frontend selection
+      },
+    });
   }
 }

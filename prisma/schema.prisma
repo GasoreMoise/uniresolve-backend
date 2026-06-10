@@ -16,6 +16,7 @@ generator client {
 enum UserRole {
   STUDENT
   STAFF
+  LECTURER
   ADMIN
 }
 
@@ -26,6 +27,11 @@ enum Department {
   CAMPUS_OPERATIONS
   ESTATE_MANAGEMENT
   GENERAL_SUPPORT
+
+  COMPUTER_SCIENCE
+  SOFTWARE_ENGINEERING
+  CIVIL_ENGINEERING
+  BUSINESS_ADMINISTRATION
 }
 
 model User {
@@ -63,24 +69,38 @@ enum TicketStatus {
   ACTION_REQUIRED
   APPROVED
   RESOLVED
+  REJECTED
 }
-
+ 
+// schema.prisma (Issue Tracking Section)
 model Ticket {
-  id              String          @id @default(uuid())
-  trackingCode    String          @unique // User-friendly short code for the global workspace search bar
+  id              String         @id @default(uuid())
+  trackingCode    String         @unique 
   studentId       String
-  isInternational Boolean         @default(false)
+  isInternational Boolean        @default(false)
   category        IssueCategory
-  serviceName     String          // e.g., "SPECIAL_QUIZ", "CARD_REPLACEMENT", "RETAKE_PAYMENT"
-  description     String          @db.Text
-  status          TicketStatus    @default(SUBMITTED)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  serviceName     String          
+  description     String         @db.Text
+  status          TicketStatus   @default(SUBMITTED)
+  
+  // ◄ ADD THESE 3 NEW SCHEDULING PARAMS HERE:
+  assessmentDate  DateTime?      // Stores the scheduled time slot for makeups
+  assessmentVenue String?        // Stores physical location parameters (e.g., "Lab 3")
+  lecturerNotes   String?        @db.Text // Holds optional context or instructions
+
+  isMarkAltered   Boolean?      // true if marks were updated, false if confirmed valid
+  revisedMarkInfo String?       // e.g., "CAT 1 changed from 12/20 to 17/20. Final: 65%"
+  hodAuditNotes   String?       @db.Text // Contextual feedback from checking the book sheet
+
+  generatedTranscriptUrl  String?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   // Relations
-  student         User            @relation("StudentTickets", fields: [studentId], references: [id], onDelete: Cascade)
+  student         User           @relation("StudentTickets", fields: [studentId], references: [id], onDelete: Cascade)
   attachments     Attachment[]
-  history     TicketHistory[]
+  history         TicketHistory[]
 
   @@index([trackingCode])
   @@index([status])
