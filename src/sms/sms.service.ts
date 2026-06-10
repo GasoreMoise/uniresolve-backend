@@ -24,7 +24,7 @@ export class SmsService {
     }
 
     // Compose a clean, 160-character compliant text body
-    const messageText = `UNIRESOLVE ALERT: Your case file [${trackingCode}] has been transitioned to [${targetStatus}]. Log in to your student hub terminal to view details.`;
+    const messageText = `UNIRESOLVE ALERT: Your case file [${trackingCode}] has been transitioned to [${targetStatus}]. Log in to your student account to view details.`;
 
     const payload = JSON.stringify({
       messages: [
