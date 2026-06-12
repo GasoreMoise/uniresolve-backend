@@ -9,7 +9,10 @@ async function bootstrap() {
   
   // Enforce resource sharing rules to communicate cleanly with your frontend
   app.enableCors({
-    origin: 'http://localhost:3000', 
+    origin: [
+      'https://uniresolve.vercel.app', // Your live frontend
+      'http://localhost:3000'          // Keep for local testing
+    ], 
     credentials: true,
   });
 
