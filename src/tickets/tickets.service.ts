@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SubmitTicketDto, UpdateTicketStatusDto } from './dto/submit-ticket.dto';
 import { IssueCategory } from '@prisma/client';
 import { SmsService } from '../sms/sms.service';
+import { AuditService } from '../audit/audit.service'; // ◄ Injected AuditService
 import PDFDocument from 'pdfkit';
 import { join } from 'path';
 import { existsSync, mkdirSync, createWriteStream } from 'fs';
@@ -12,6 +13,7 @@ export class TicketsService {
   constructor(
     private prisma: PrismaService,
     private smsService: SmsService,
+    private auditService: AuditService, // ◄ Added to constructor
   ) {}
 
   async createTicket(dto: SubmitTicketDto, studentId: string, files: Express.Multer.File[]) {
@@ -51,6 +53,15 @@ export class TicketsService {
           comment: 'Issue initiated on the central digital platform.',
         },
       });
+
+      // ◄ CRYPTOGRAPHIC AUDIT LOG
+      await this.auditService.logAction(
+        'TICKET_CREATED',
+        'Ticket',
+        ticket.id,
+        studentId,
+        { category: ticket.category, trackingCode: ticket.trackingCode }
+      );
 
       return {
         message: 'Your request has been successfully recorded.',
@@ -138,6 +149,15 @@ export class TicketsService {
         this.smsService.sendStatusAlert(existingTicket.student.phoneNumber, existingTicket.trackingCode, dto.status);
       }
 
+      // ◄ CRYPTOGRAPHIC AUDIT LOG
+      await this.auditService.logAction(
+        'STATUS_TRANSITION',
+        'Ticket',
+        ticketId,
+        staffId,
+        { previousStatus: existingTicket.status, newStatus: dto.status }
+      );
+
       return {
         message: 'Ticket status successfully updated and archived in the ledger.',
         ticketId: updatedTicket.id,
@@ -179,6 +199,15 @@ export class TicketsService {
         this.smsService.sendStatusAlert(ticket.student.phoneNumber, ticket.trackingCode, `RESOLVED (Scheduled on ${dto.date} at ${dto.venue})`);
       }
 
+      // ◄ CRYPTOGRAPHIC AUDIT LOG
+      await this.auditService.logAction(
+        'ASSESSMENT_SCHEDULED_AND_RESOLVED',
+        'Ticket',
+        ticketId,
+        staffId,
+        { assessmentDate: dto.date, assessmentVenue: dto.venue }
+      );
+
       return { message: 'Special assessment resolved and scheduled successfully.', ticketId: updated.id };
     });
   }
@@ -213,6 +242,15 @@ export class TicketsService {
       if (ticket.student?.phoneNumber) {
         this.smsService.sendStatusAlert(ticket.student.phoneNumber, ticket.trackingCode, `${dto.status}: ${dto.comment.substring(0, 30)}...`);
       }
+
+      // ◄ CRYPTOGRAPHIC AUDIT LOG
+      await this.auditService.logAction(
+        'REVIEW_DECISION_ENFORCED',
+        'Ticket',
+        ticketId,
+        staffId,
+        { decision: dto.status, logic: 'Review bounds hit' }
+      );
 
       return { message: `Ticket review status changed to ${dto.status}.`, ticketId: updated.id };
     });
@@ -255,6 +293,15 @@ export class TicketsService {
         this.smsService.sendStatusAlert(ticket.student.phoneNumber, ticket.trackingCode, 'RESOLVED');
       }
 
+      // ◄ CRYPTOGRAPHIC AUDIT LOG
+      await this.auditService.logAction(
+        'EXAM_CLAIM_ADJUDICATED',
+        'Ticket',
+        ticketId,
+        staffId,
+        { markAltered: dto.isMarkAltered, revisedMarkInfo: dto.revisedMarkInfo }
+      );
+
       return { message: 'Exam claim resolution archived successfully.', ticketId: updated.id };
     });
   }
@@ -287,6 +334,15 @@ export class TicketsService {
         if (ticket.student?.phoneNumber) {
           this.smsService.sendStatusAlert(ticket.student.phoneNumber, ticket.trackingCode, 'REJECTED');
         }
+
+        // ◄ CRYPTOGRAPHIC AUDIT LOG
+        await this.auditService.logAction(
+          'TRANSCRIPT_REJECTED',
+          'Ticket',
+          ticketId,
+          staffId,
+          { decision: dto.decision, reason: dto.reason }
+        );
 
         return { message: 'Transcript request marked as rejected.', ticketId: updated.id };
       }
@@ -357,7 +413,6 @@ export class TicketsService {
       });
 
       // --- DATABASE UPDATE ---
-      // ◄ FIX: The string now matches the NestJS standard Controller path resolution!
       const compiledPdfUrl = `/tickets/transcripts/download/${filename}`;
 
       const updated = await tx.ticket.update({
@@ -381,6 +436,15 @@ export class TicketsService {
       if (ticket.student?.phoneNumber) {
         this.smsService.sendStatusAlert(ticket.student.phoneNumber, ticket.trackingCode, 'RESOLVED');
       }
+
+      // ◄ CRYPTOGRAPHIC AUDIT LOG
+      await this.auditService.logAction(
+        'TRANSCRIPT_GENERATED_AND_ISSUED',
+        'Ticket',
+        ticketId,
+        staffId,
+        { documentUrl: compiledPdfUrl }
+      );
 
       return { message: 'Transcript successfully compiled and released.', ticketId: updated.id };
     });
