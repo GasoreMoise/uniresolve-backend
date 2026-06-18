@@ -21,6 +21,10 @@ export class SubmitTicketDto {
   @IsNotEmpty()
   @IsString()
   isInternational: string;
+
+  @IsString()
+  @IsOptional()
+  moduleId?: string;
 }
 
 /**

@@ -15,6 +15,9 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { TicketsService } from './tickets.service';
 import { SubmitTicketDto, UpdateTicketStatusDto } from './dto/submit-ticket.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; 
+import { RolesGuard } from '../auth/guards/roles.guard'; // ◄ 1. Imported the Bouncer
+import { Roles } from '../auth/decorators/roles.decorator'; // ◄ 2. Imported the Tagging Decorator
+import { UserRole } from '@prisma/client'; // ◄ 3. Imported the Enum for strict typing
 import { GetUserId } from '../auth/decorators/get-user.decorator'; 
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -26,8 +29,13 @@ import type { Response } from 'express';
 export class TicketsController {
   constructor(private ticketsService: TicketsService) {}
 
+  // ==========================================
+  // STUDENT FACING ENDPOINTS
+  // ==========================================
+
   @Post('submit')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT) // ◄ strictly locked to students
   @UseInterceptors(
     FilesInterceptor('attachments', 5, {
       storage: diskStorage({
@@ -48,19 +56,26 @@ export class TicketsController {
   }
 
   @Get('student')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT) // ◄ strictly locked to students
   async getStudentQueue(@GetUserId() studentId: string) {
     return this.ticketsService.getStudentTickets(studentId);
   }
 
+  // ==========================================
+  // ADMINISTRATIVE & STAFF ENDPOINTS
+  // ==========================================
+
   @Get('department')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STAFF, UserRole.LECTURER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async getDepartmentQueue(@GetUserId() staffId: string) {
     return this.ticketsService.getDepartmentTickets(staffId);
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STAFF, UserRole.LECTURER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async updateStatus(
     @Param('id') ticketId: string,
     @Body(new ValidationPipe()) dto: UpdateTicketStatusDto,
@@ -70,7 +85,8 @@ export class TicketsController {
   }
 
   @Patch(':id/resolve-assessment')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STAFF, UserRole.LECTURER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async resolveSpecialAssessment(
     @Param('id') ticketId: string,
     @Body() dto: { date: string; venue: string; notes?: string },
@@ -80,7 +96,8 @@ export class TicketsController {
   }
 
   @Patch(':id/review-decision')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STAFF, UserRole.LECTURER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async reviewDecision(
     @Param('id') ticketId: string,
     @Body() dto: { status: 'REJECTED' | 'ACTION_REQUIRED'; comment: string },
@@ -90,7 +107,8 @@ export class TicketsController {
   }
 
   @Patch(':id/resolve-exam-claim')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STAFF, UserRole.LECTURER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async resolveExamClaim(
     @Param('id') ticketId: string,
     @Body() dto: { isMarkAltered: boolean; revisedMarkInfo?: string; notes: string },
@@ -100,7 +118,8 @@ export class TicketsController {
   }
 
   @Patch(':id/resolve-transcript')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STAFF, UserRole.ADMIN, UserRole.SUPER_ADMIN) // Lecturers typically don't issue official university transcripts
   async resolveTranscript(
     @Param('id') ticketId: string,
     @Body() dto: { decision: 'APPROVED' | 'REJECTED'; reason?: string },
@@ -109,7 +128,10 @@ export class TicketsController {
     return this.ticketsService.commitTranscriptResolution(ticketId, dto, staffId);
   }
 
-  // ◄ FIX: Removed the absolute path hack. NestJS will now map this perfectly to /api/tickets/transcripts/download/:filename
+  // ==========================================
+  // PUBLIC / UNGUESSABLE FILE SERVING
+  // ==========================================
+
   @Get('transcripts/download/:filename')
   async downloadTranscript(
     @Param('filename') filename: string,

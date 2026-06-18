@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { AuditService } from './audit.service';
-import { PrismaModule } from '../../prisma/prisma.module'; // Ensure PrismaModule is imported
+import { AuditController } from './audit.controller';
 
+@Global() // Makes the AuditService available everywhere (like TicketsService) without needing constant imports
 @Module({
-  imports: [PrismaModule], // We need Prisma to save the logs
+  controllers: [AuditController], // ◄ Wires up the API routes
   providers: [AuditService],
-  exports: [AuditService], // Crucial: Allows other modules to use logAction()
+  exports: [AuditService],
 })
 export class AuditModule {}

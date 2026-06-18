@@ -4,11 +4,13 @@ import { TicketsService } from './tickets.service';
 import { TicketsController } from './tickets.controller';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
-import { AuditModule } from '../audit/audit.module'; // ◄ 1. Import the AuditModule here
+import { AuditModule } from '../audit/audit.module';
+import { EventsModule } from '../events/events.module'; // ◄ 1. Import the AuditModule here
 
 @Module({
   imports: [
-    AuditModule // ◄ 2. Register it in the imports array
+    AuditModule,
+    EventsModule // ◄ 2. Register it in the imports array
   ],
   controllers: [TicketsController],
   providers: [

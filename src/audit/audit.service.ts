@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service'; // Adjust path if your PrismaService is elsewhere
+import { PrismaService } from '../../prisma/prisma.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -51,11 +51,28 @@ export class AuditService {
         actorId,
         previousHash,
         currentHash,
+        metadata: payload ? JSON.stringify(payload) : null, // ◄ Ensures the UI can display the context
       },
     });
   }
 
   private generateGenesisHash(): string {
     return crypto.createHash('sha256').update('UNIRESOLVE_GENESIS_BLOCK').digest('hex');
+  }
+
+  // ◄ NEW: Fetch logs for the Super Admin Audit Ledger Dashboard
+  async getRecentLogs() {
+    return this.prisma.auditLog.findMany({
+      orderBy: { timestamp: 'desc' },
+      take: 200, // Hard limit to ensure fast dashboard load times
+      include: {
+        actor: { 
+          select: { 
+            fullName: true, 
+            role: true 
+          } 
+        }
+      }
+    });
   }
 }
