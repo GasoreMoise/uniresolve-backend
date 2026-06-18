@@ -167,34 +167,35 @@ export class TicketsService {
 
     // ◄ EXCLUSIVE ISOLATION ROUTING BLOCK ►
     if (staff.role === 'ADMIN') {
-      // Super Admin: No filter, sees the entire university queue
       categoryFilter = {};
     } 
     else if (staff.department === 'FINANCE') {
       categoryFilter = { category: 'FINANCIAL_GATEWAYS' };
     } 
     else if (staff.department === 'REGISTRAR') {
-      // Registrar: Catches Transcripts AND Card Replacements exclusively
+      // ◄ FIXED: Registrar receives their 3 specific records tasks.
       categoryFilter = { 
         OR: [
-          { category: 'ACADEMIC_PROGRESSION_VERIFICATION' },
+          { serviceName: { contains: 'Transcript Request', mode: 'insensitive' } },
+          { serviceName: { contains: 'Student Registration', mode: 'insensitive' } },
           { serviceName: { contains: 'Card Replacement', mode: 'insensitive' } }
         ]
       };
     } 
     else if (staff.department === 'FACULTY_HOD') {
-      // HOD: Sees Academic Requests, but PROACTIVELY HIDDEN from Card Replacements
+      // ◄ FIXED: HOD receives Academic Progression requests, but the Registrar's tasks are blocked.
       categoryFilter = { 
         category: 'ACADEMIC_PROGRESSION_VERIFICATION',
-        NOT: { serviceName: { contains: 'Card Replacement', mode: 'insensitive' } }
+        NOT: { 
+          OR: [
+            { serviceName: { contains: 'Card Replacement', mode: 'insensitive' } },
+            { serviceName: { contains: 'Student Registration', mode: 'insensitive' } }
+          ]
+        }
       };
     } 
     else if (staff.department === 'CAMPUS_OPERATIONS' || staff.department === 'ESTATE_MANAGEMENT') {
-      // Operations: Sees Administrative Requests, but PROACTIVELY HIDDEN from Card Replacements
-      categoryFilter = { 
-        category: 'ADMINISTRATIVE_OPERATIONAL_REQUESTS',
-        NOT: { serviceName: { contains: 'Card Replacement', mode: 'insensitive' } }
-      };
+      categoryFilter = { category: 'ADMINISTRATIVE_OPERATIONAL_REQUESTS' };
     } 
     else if (staff.department === 'GENERAL_SUPPORT') {
       categoryFilter = { category: 'DIRECT_SUPPORT_EXTERNAL_COMPLIANCE' };
